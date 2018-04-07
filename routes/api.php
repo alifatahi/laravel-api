@@ -18,7 +18,8 @@ use Illuminate\Http\Request;
 //});
 
 //Prefix for Our API
-Route::group(['prefix' => 'api/v1'], function () {
+//Always Careful because already our route prefix with api
+Route::prefix('v1')->group(function () {
 // Meeting Controller
     Route::resource('meeting', 'MeetingController', [
         'except' => ['edit', 'create']

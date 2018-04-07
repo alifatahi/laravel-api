@@ -21,7 +21,7 @@ class AuthController extends Controller
     /**
      * @param Request $request
      */
-    public function singin(Request $request)
+    public function signin(Request $request)
     {
         return "It Work";
     }
