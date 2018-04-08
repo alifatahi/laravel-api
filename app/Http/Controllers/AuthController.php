@@ -18,7 +18,26 @@ class AuthController extends Controller
         $name = $request->input('name');
         $email = $request->input('email');
         $password = $request->input('password');
-        return "It Work";
+
+//        Create object of User with require parameters for sigin
+        $user = [
+            'name' => $name,
+            'email' => $email,
+            'password' => $password,
+            'signin' => [
+                'href' => 'v1/user/signin',
+                'method' => 'POST',
+                'params' => 'email,password'
+            ],
+        ];
+
+//        Our response
+        $response = [
+            'msg' => 'User Created',
+            'user' => $user
+        ];
+
+        return response()->json($response, 201);
     }
 
     /**
