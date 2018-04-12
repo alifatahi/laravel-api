@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Meeting;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 class MeetingController extends Controller
@@ -20,27 +22,20 @@ class MeetingController extends Controller
     {
 
 //        Create Object of Meeting
-        $meeting = [
-            'title' => 'Title',
-            'description' => 'Description',
-            'time' => 'Time',
-            'user_id' => 'User Id',
-//            we also pass extra data which is associative array and it has 2 data
-//        href of data that created in API way
-//        and method that href should pass
-            'view_meeting' => [
-                'href' => 'v1/meeting/1',
+        $meetings = Meeting::all();
+
+        foreach ($meetings as $meeting) {
+//            attach this 2 links
+            $meeting->view_meeting = [
+                'href' => 'v1/meeting/1' . $meeting->id,
                 'method' => 'GET'
-            ]
-        ];
+            ];
+        }
 
 //        Create another object for response and it has 2 data message and meeting
         $response = [
             'msg' => 'List of all meeting',
-            'meeting' => [
-                $meeting,
-                $meeting
-            ]
+            'meeting' => $meetings
         ];
 //        Now we use response method which is like simple return things but with this method we able to pass HTTP status code
 //        Now we also use json method with response its automatically set Content-Type Header to: application/json as wel as
@@ -73,23 +68,33 @@ class MeetingController extends Controller
         $user_id = $request->input('user_id');
 
 //        Create Object of Created Meeting
-        $meeting = [
+        $meeting = new Meeting([
+            'time' => Carbon::createFromFormat('YmdHie', $time),
             'title' => $title,
-            'description' => $description,
-            'time' => $time,
-            'user_id' => $user_id,
-//            we also pass extra data which is associative array and it has 2 data
+            'description' => $description
+        ]);
+
+        if ($meeting->save()) {
+//            attach userID
+            $meeting->users()->attach($user_id);
+            //            we also pass extra data which is associative array and it has 2 data
 //        href of data that created in API way
 //        and method that href should pass
-            'view_meeting' => [
-                'href' => 'v1/meeting/1',
+            $meeting->view_meeting = [
+                'href' => 'v1/meeting/1' . $meeting->id,
                 'method' => 'GET'
-            ]
-        ];
+            ];
+
+            $message = [
+                'msg' => 'Meeting Created',
+                'meeting' => $meeting
+            ];
+            return response()->json($message, 201);
+        }
 
 //        Create another object for response and it has 2 data message and meeting
         $response = [
-            'msg' => 'Meeting Created',
+            'msg' => 'Meeting Not Created',
             'meeting' => $meeting
         ];
 //        Now we use response method which is like simple return things but with this method we able to pass HTTP status code
@@ -97,7 +102,7 @@ class MeetingController extends Controller
 //        convert array to JSON using json_encode
 
 //        now as we said we can use status code and here we use 201 (created) Every thing is successful and resource is created
-        return response()->json($response, 201);
+        return response()->json($response, 404);
 
     }
 
@@ -110,19 +115,15 @@ class MeetingController extends Controller
     public function show($id)
     {
         //        Create Object of Meeting
-        $meeting = [
-            'title' => 'Title',
-            'description' => 'Description',
-            'time' => 'Time',
-            'user_id' => 'User Id',
-//            we also pass extra data which is associative array and it has 2 data
+        $meeting = Meeting::with('users')->where('id', $id)->findOrFail();
+        //            we also pass extra data which is associative array and it has 2 data
 //        href of data that created in API way
 //        and method that href should pass
-            'view_meeting' => [
-                'href' => 'v1/meeting',
-                'method' => 'GET'
-            ]
+        $meeting->view_meeting = [
+            'href' => 'v1/meeting',
+            'method' => 'GET'
         ];
+
 
 //        Create another object for response and it has 2 data message and meeting
         $response = [
@@ -176,6 +177,33 @@ class MeetingController extends Controller
             ]
         ];
 
+        $meeting = Meeting::with('users')->findOrFail();
+
+        if (!$meeting->users()->where('users.id', $user_id)->first()) {
+            return response()->json(['msg' => 'User Not Register for Meeting, Update Not Successful'], 401);
+        };
+
+        $meeting->time = Carbon::createFromFormat('YmdHie', $time);
+        $meeting->title = $title;
+        $meeting->description = $description;
+
+        if (!$meeting->update()) {
+            return response()->json(['msg', 'user not register for meeting update not successful'], 401);
+        };
+
+        $meeting->time = Carbon::createFromFormat('YmdHie', $time);
+        $meeting->title = $title;
+        $meeting->description = $description;
+
+        if (!$meeting->update()) {
+            return response()->json(['msg' => 'Error during updating'], 404);
+        }
+
+        $meeting->view_meeting = [
+            'href' => 'v1/meeting/1' . $meeting->id,
+            'method' => 'GET'
+        ];
+
 //        Create another object for response and it has 2 data message and meeting
         $response = [
             'msg' => 'Meeting Updated',
@@ -198,6 +226,15 @@ class MeetingController extends Controller
      */
     public function destroy($id)
     {
+        $meeting = Meeting::findOrFail($id);
+        $users = $meeting->users;
+        $meeting->users()->detach();
+        if (!$meeting->delete()) {
+            foreach ($users as $user) {
+                $meeting->users()->attach($user);
+            }
+            return response()->json(['msg' => 'Delete Failed'], 404);
+        }
 
 //      Response message  also it has create associative array with href , method and parameters
         $response = [

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Meeting;
+use App\User;
 use Illuminate\Http\Request;
 
 class RegistrationController extends Controller
@@ -23,24 +25,24 @@ class RegistrationController extends Controller
         $meeting_id = $request->input('meeting_id');
         $user_id = $request->input('user_id');
 
+        $meeting = Meeting::findOrFail($meeting_id);
+        $user = User::findOrFail($user_id);
 
-//        Create Object of Meeting that user want to signup
-        $meeting = [
-            'title' => 'Title',
-            'description' => 'Description',
-            'time' => 'Time',
-//            we also pass extra data which is associative array and it has 2 data
-//        href of data that created in API way
-//        and method that href should pass
-            'view_meeting' => [
-                'href' => 'v1/meeting/1',
-                'method' => 'GET'
+        $message = [
+            'msg' => 'Usre is already Register',
+            'user' => $user,
+            'meeting' => $meeting,
+            'unregistered' => [
+                'href' => 'v1/meeting/registration/' . $meeting->id,
+                'method' => 'DELETE'
             ]
         ];
-//        Because we want to know which user sign uo for which meetings
-        $user = [
-            'name' => 'Name'
-        ];
+
+        if ($meeting->users()->where('users.id', $user->id)->first()) {
+            return response()->json($message, 404);
+        }
+
+        $user->meetings()->attach($meeting);
 
 //        Create another object for response and it has 2 data message and meeting
         $response = [
@@ -48,7 +50,7 @@ class RegistrationController extends Controller
             'meeting' => $meeting,
             'user' => $user,
             'unregister' => [
-                'href' => 'v1/meeting/registration/1',
+                'href' => 'v1/meeting/registration/1' . $meeting->id,
                 'method' => 'DELETE'
             ]
         ];
@@ -70,29 +72,14 @@ class RegistrationController extends Controller
      */
     public function destroy($id)
     {
-        //        Create Object of Meeting for Unregistered
-        $meeting = [
-            'title' => 'Title',
-            'description' => 'Description',
-            'time' => 'Time',
-//            we also pass extra data which is associative array and it has 2 data
-//        href of data that created in API way
-//        and method that href should pass
-            'view_meeting' => [
-                'href' => 'v1/meeting/1',
-                'method' => 'GET'
-            ]
-        ];
-
-        $user = [
-            'name' => 'Name'
-        ];
+        $meeting = Meeting::findOrFail($id);
+        $meeting->users()->detach();
 
 //        Create another object for response and it has 2 data message and meeting
         $response = [
             'msg' => 'User Unregistered for Meeting',
             'meeting' => $meeting,
-            'user' => $user,
+            'user' => 'tbd',
             'unregister' => [
                 'href' => 'v1/meeting/registration',
                 'method' => 'POST',
