@@ -5,12 +5,22 @@ namespace App\Http\Controllers;
 use App\Meeting;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Tymon\JWTAuth\Facades\JWTAuth;
 
+
+/**
+ * Class MeetingController
+ * @package App\Http\Controllers
+ */
 class MeetingController extends Controller
 {
+    /**
+     * MeetingController constructor.
+     */
     public function __construct()
     {
-//        Middleware
+//        Protect our Route with JWT middleware also we declare which routes we want to protect
+        $this->middleware('jwt.auth', ['only' => ['update', 'store', 'destroy']]);
     }
 
     /**
@@ -21,18 +31,18 @@ class MeetingController extends Controller
     public function index()
     {
 
-//        Create Object of Meeting
+//       Get All Meetings
         $meetings = Meeting::all();
 
         foreach ($meetings as $meeting) {
-//            attach this 2 links
+//            attach this 2 links to our Meeting
             $meeting->view_meeting = [
-                'href' => 'v1/meeting/1' . $meeting->id,
+                'href' => 'v1/meeting/' . $meeting->id,
                 'method' => 'GET'
             ];
         }
 
-//        Create another object for response and it has 2 data message and meeting
+//        Create response and it has 2 data message and meeting
         $response = [
             'msg' => 'List of all meeting',
             'meeting' => $meetings
@@ -55,19 +65,25 @@ class MeetingController extends Controller
      */
     public function store(Request $request)
     {
+//        Validation
         $this->validate($request, [
             'title' => 'required',
             'description' => 'required',
             'time' => 'required|date_format:YmdHie',
-            'user_id' => 'required',
         ]);
+
+//        Check User if Exists With JWT ParseToken
+        if (!$user = JWTAuth::parseToken()->authenticate()) {
+            return response()->json(['msg' => 'User Not Found'], 404);
+        }
+
 //        Get Input
         $title = $request->input('title');
         $description = $request->input('description');
         $time = $request->input('time');
-        $user_id = $request->input('user_id');
+        $user_id = $user->id;
 
-//        Create Object of Created Meeting
+//        Create New Meeting
         $meeting = new Meeting([
             'time' => Carbon::createFromFormat('YmdHie', $time),
             'title' => $title,
@@ -81,7 +97,7 @@ class MeetingController extends Controller
 //        href of data that created in API way
 //        and method that href should pass
             $meeting->view_meeting = [
-                'href' => 'v1/meeting/1' . $meeting->id,
+                'href' => 'v1/meeting/' . $meeting->id,
                 'method' => 'GET'
             ];
 
@@ -89,19 +105,19 @@ class MeetingController extends Controller
                 'msg' => 'Meeting Created',
                 'meeting' => $meeting
             ];
+//        now as we said we can use status code and here we use 201 (created) Every thing is successful and resource is created
             return response()->json($message, 201);
         }
 
-//        Create another object for response and it has 2 data message and meeting
+//        Response Message
         $response = [
-            'msg' => 'Meeting Not Created',
-            'meeting' => $meeting
+            'msg' => 'Error during creation'
         ];
 //        Now we use response method which is like simple return things but with this method we able to pass HTTP status code
 //        Now we also use json method with response its automatically set Content-Type Header to: application/json as wel as
 //        convert array to JSON using json_encode
 
-//        now as we said we can use status code and here we use 201 (created) Every thing is successful and resource is created
+//        now as we said we can use status code and here we use 404 Failed
         return response()->json($response, 404);
 
     }
@@ -114,9 +130,10 @@ class MeetingController extends Controller
      */
     public function show($id)
     {
-        //        Create Object of Meeting
-        $meeting = Meeting::with('users')->where('id', $id)->findOrFail();
-        //            we also pass extra data which is associative array and it has 2 data
+//       Find Meeting With Users it has
+        $meeting = Meeting::with('users')->findOrFail($id);
+
+//        we also pass extra data which is associative array and it has 2 data
 //        href of data that created in API way
 //        and method that href should pass
         $meeting->view_meeting = [
@@ -124,12 +141,12 @@ class MeetingController extends Controller
             'method' => 'GET'
         ];
 
-
 //        Create another object for response and it has 2 data message and meeting
         $response = [
             'msg' => 'Meeting Information',
             'meeting' => $meeting
         ];
+
 //        Now we use response method which is like simple return things but with this method we able to pass HTTP status code
 //        Now we also use json method with response its automatically set Content-Type Header to: application/json as wel as
 //        convert array to JSON using json_encode
@@ -149,58 +166,44 @@ class MeetingController extends Controller
      */
     public function update(Request $request, $id)
     {
+//        Validation
         $this->validate($request, [
             'title' => 'required',
             'description' => 'required',
             'time' => 'required|date_format:YmdHie',
-            'user_id' => 'required',
         ]);
+
+        //        Check User
+        if (!$user = JWTAuth::parseToken()->authenticate()) {
+            return response()->json(['msg' => 'User Not Found'], 404);
+        }
 
         //        Get Input
         $title = $request->input('title');
         $description = $request->input('description');
         $time = $request->input('time');
-        $user_id = $request->input('user_id');
+        $user_id = $user->id;
 
-//        Create Object of Update Meeting
-        $meeting = [
-            'title' => $title,
-            'description' => $description,
-            'time' => $time,
-            'user_id' => $user_id,
-//            we also pass extra data which is associative array and it has 2 data
-//        href of data that created in API way
-//        and method that href should pass
-            'view_meeting' => [
-                'href' => 'v1/meeting/1',
-                'method' => 'GET'
-            ]
-        ];
+//        Get Meeting With Users
+        $meeting = Meeting::with('users')->findOrFail($id);
 
-        $meeting = Meeting::with('users')->findOrFail();
-
+//        Check if User Registered For Meeting
         if (!$meeting->users()->where('users.id', $user_id)->first()) {
             return response()->json(['msg' => 'User Not Register for Meeting, Update Not Successful'], 401);
         };
 
+//        Pass New Data
         $meeting->time = Carbon::createFromFormat('YmdHie', $time);
         $meeting->title = $title;
         $meeting->description = $description;
 
-        if (!$meeting->update()) {
-            return response()->json(['msg', 'user not register for meeting update not successful'], 401);
-        };
-
-        $meeting->time = Carbon::createFromFormat('YmdHie', $time);
-        $meeting->title = $title;
-        $meeting->description = $description;
-
+//        Check If Not Update
         if (!$meeting->update()) {
             return response()->json(['msg' => 'Error during updating'], 404);
         }
 
         $meeting->view_meeting = [
-            'href' => 'v1/meeting/1' . $meeting->id,
+            'href' => 'v1/meeting/' . $meeting->id,
             'method' => 'GET'
         ];
 
@@ -218,18 +221,30 @@ class MeetingController extends Controller
 
     }
 
+
     /**
-     * Remove the specified resource from storage.
-     *
-     * @param  int $id
-     * @return \Illuminate\Http\Response
+     * @param $id
+     * @return \Illuminate\Http\JsonResponse
+     * @throws \Exception
      */
     public function destroy($id)
     {
         $meeting = Meeting::findOrFail($id);
+        //        Check User
+        if (!$user = JWTAuth::parseToken()->authenticate()) {
+            return response()->json(['msg' => 'User Not Found'], 404);
+        }
+//        Check if User Register For Meeting
+        if (!$meeting->users()->where('users.id', $user->id)->first()) {
+            return response()->json(['msg' => 'User Not Register for Meeting, Delete Not Successful'], 401);
+        };
+//        Get Signin User of Meeting
         $users = $meeting->users;
+//      Detach it From Meeting
         $meeting->users()->detach();
+//        Check if Meeting Not Deleted
         if (!$meeting->delete()) {
+//            We attach User Again
             foreach ($users as $user) {
                 $meeting->users()->attach($user);
             }
